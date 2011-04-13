@@ -1,23 +1,19 @@
 import cPickle as pickle
-from pymongo import Connection 
 from time import time
 
 from scrapy.http import Headers
 from scrapy.core.downloader.responsetypes import responsetypes
-from scrapy.conf import settings
+from scrapy import conf
 from scrapy.utils.request import request_fingerprint
+
+from scmongo.util import get_database
 
 
 class MongoCacheStorage(object):
 
-    def __init__(self, settings=settings):
+    def __init__(self, settings=conf.settings):
         self.expiration_secs = settings.getint('HTTPCACHE_EXPIRATION_SECS')
-
-        mongo_host = settings.get('HTTPCACHE_MONGO_HOST', 'localhost')
-        mongo_port = settings.getint('HTTPCACHE_MONGO_PORT', 27017)
-        mongo_db = settings.get('HTTPCACHE_MONGO_DB', settings.get('BOT_NAME'))
-
-        self.db = Connection(mongo_host, mongo_port)[mongo_db]
+        self.db = get_database(settings)
         self.cols = {}
 
     def open_spider(self, spider):
