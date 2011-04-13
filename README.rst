@@ -22,6 +22,10 @@ Available extensions
 Mongo Cache Storage
 -------------------
 
-Class: ``scmongo.httpcache.MongoCacheStorage``
+Module: ``scmongo.httpcache``
 
 A MongoDB backend for HTTP cache storage. It stores responses using GridFS.
+
+To use it, set the following Scrapy setting in your project::
+
+    HTTPCACHE_STORAGE = 'scmongo.httpcache.MongoCacheStorage'
