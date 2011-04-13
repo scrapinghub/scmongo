@@ -5,15 +5,20 @@ scmongo
 This project contains some extensions for using MongoDB with the Scrapy
 web crawling framework.
 
-Currently available extensions:
+Currently available classes:
 
-* Mongo backend for HTTP cache
+Mongo Cache Storage
+-------------------
+
+Class: ``scmongo.httpcache.MongoCacheStorage``
+
+A HTTP cache storage backend that stores responses on MongoDB (GridFS).
 
 Requirements
 ============
 
 * Scrapy 0.12 or above
-* pymongo
+* pymongo 1.6 or above
 
 Install
 =======
