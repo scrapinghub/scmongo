@@ -1,6 +1,6 @@
 from time import time
 
-from scrapy import responsetypes
+from scrapy.responsetypes import responsetypes
 from scrapy import conf
 from scrapy.utils.request import request_fingerprint
 from gridfs import GridFS, errors
