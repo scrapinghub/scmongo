@@ -19,7 +19,7 @@ class MongoCacheStorage(object):
         self.fs = {}
 
     def open_spider(self, spider):
-        self.fs[spider] = GridFS(self.db, 'httpcache.%s' % spider.name)
+        self.fs[spider] = GridFS(self.db, 'httpcache')
 
     def close_spider(self, spider):
         del self.fs[spider]
@@ -37,7 +37,7 @@ class MongoCacheStorage(object):
         return response
  
     def store_response(self, spider, request, response):
-        key = self._request_key(request)
+        key = spider.name + '/' + self._request_key(request)
         kwargs = {
             '_id': key,
             'time': time(),
@@ -52,7 +52,7 @@ class MongoCacheStorage(object):
             self.fs[spider].put(response.body, **kwargs)
 
     def _get_file(self, spider, request):
-        key = self._request_key(request)
+        key = spider.name + '/' + self._request_key(request)
         try:
             gf = self.fs[spider].get(key)
         except errors.NoFile:
