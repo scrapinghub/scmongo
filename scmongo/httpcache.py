@@ -3,6 +3,8 @@ from time import time
 from scrapy.responsetypes import responsetypes
 from scrapy import conf
 from scrapy.utils.request import request_fingerprint
+from scrapy.http import Headers
+
 from gridfs import GridFS, errors
 
 from scmongo.util import get_database
@@ -30,7 +32,7 @@ class MongoCacheStorage(object):
             return # not cached
         url = str(gf.url)
         status = str(gf.status)
-        headers = [(x, map(str, y)) for x, y in gf.headers.iteritems()]
+        headers = Headers([(x, map(str, y)) for x, y in gf.headers.iteritems()])
         body = gf.read()
         respcls = responsetypes.from_args(headers=headers, url=url)
         response = respcls(url=url, headers=headers, status=status, body=body)
