@@ -12,12 +12,15 @@ import os
 from time import time
 
 from scrapy.responsetypes import responsetypes
-from scrapy import conf
+from scrapy.exceptions import NotConfigured
 from scrapy.utils.request import request_fingerprint
 from scrapy.http import Headers
 
-import pymongo
-from gridfs import GridFS, errors
+try:
+    from pymongo import Connection
+    from gridfs import GridFS, errors
+except ImportError:
+    Connection = None
 
 def get_database(settings):
     """Return Mongo database based on the given settings, also pulling the
@@ -44,11 +47,7 @@ def get_database(settings):
         or settings['MONGO_PASSWORD'] \
         or os.environ.get('MONGO_PASSWORD')
 
-    connection = pymongo.Connection(host, port)[db]
-    if user is not None and password is not None:
-        connection.authenticate(user, password)
-
-    return connection
+    return (host, port, db, user, password)
 
 
 class MongoCacheStorage(object):
@@ -56,9 +55,15 @@ class MongoCacheStorage(object):
     GridFS
     """
 
-    def __init__(self, settings=conf.settings):
+    def __init__(self, settings):
+        if Connection is None:
+            raise NotConfigured('%s is missing pymongo or gridfs module.' %
+                                self.__class__.__name__)
         self.expire = settings.getint('HTTPCACHE_EXPIRATION_SECS')
-        self.db = get_database(settings)
+        host, port, db, user, password = get_database(settings)
+        self.db = Connection(host, port)[db]
+        if user is not None and password is not None:
+            self.db.authenticate(user, password)
         self.fs = {}
 
     def open_spider(self, spider):
