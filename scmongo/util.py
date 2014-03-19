@@ -19,5 +19,15 @@ def get_database(settings):
         or settings['MONGO_DATABASE'] \
         or os.environ.get('MONGO_DATABASE') \
         or settings['BOT_NAME']
+    user = settings['HTTPCACHE_MONGO_USERNAME'] \
+        or settings['MONGO_USERNAME'] \
+        or os.environ.get('MONGO_USERNAME')
+    password = settings['HTTPCACHE_MONGO_PASSWORD'] \
+        or settings['MONGO_PASSWORD'] \
+        or os.environ.get('MONGO_PASSWORD')
 
-    return pymongo.Connection(host, port)[db]
+    connection = pymongo.Connection(host, port)[db]
+    if user is not None and password is not None:
+        connection.authenticate(user, password)
+
+    return connection
