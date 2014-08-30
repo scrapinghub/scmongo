@@ -52,7 +52,10 @@ def get_database(settings):
 
 class MongoCacheStorage(object):
     """Storage backend for Scrapy HTTP cache, which stores responses in MongoDB
-    GridFS
+    GridFS.
+
+    If HTTPCACHE_SHARDED is True, a different collection will be used for
+    each spider, similar to FilesystemCacheStorage using folders per spider.
     """
 
     def __init__(self, settings):
@@ -60,6 +63,7 @@ class MongoCacheStorage(object):
             raise NotConfigured('%s is missing pymongo or gridfs module.' %
                                 self.__class__.__name__)
         self.expire = settings.getint('HTTPCACHE_EXPIRATION_SECS')
+        self.sharded = settings.getbool('HTTPCACHE_SHARDED', False)
         host, port, db, user, password = get_database(settings)
         self.db = Connection(host, port)[db]
         if user is not None and password is not None:
@@ -67,10 +71,17 @@ class MongoCacheStorage(object):
         self.fs = {}
 
     def open_spider(self, spider):
-        self.fs[spider] = GridFS(self.db, 'httpcache')
+        _shard = 'httpcache'
+        if self.sharded:
+            _shard = 'httpcache.%s' % spider.name
+        self.fs[spider] = GridFS(self.db, _shard)
 
     def close_spider(self, spider):
         del self.fs[spider]
+
+    def __del__(self):
+        if hasattr(self, 'db'):
+            self.db.connection.close()
 
     def retrieve_response(self, spider, request):
         gf = self._get_file(spider, request)
@@ -85,7 +96,7 @@ class MongoCacheStorage(object):
         return response
 
     def store_response(self, spider, request, response):
-        key = spider.name + '/' + self._request_key(request)
+        key = self._request_key(spider, request)
         kwargs = {
             '_id': key,
             'time': time(),
@@ -100,7 +111,7 @@ class MongoCacheStorage(object):
             self.fs[spider].put(response.body, **kwargs)
 
     def _get_file(self, spider, request):
-        key = spider.name + '/' + self._request_key(request)
+        key = self._request_key(spider, request)
         try:
             gf = self.fs[spider].get(key)
         except errors.NoFile:
@@ -109,5 +120,11 @@ class MongoCacheStorage(object):
             return # expired
         return gf
 
-    def _request_key(self, request):
-        return request_fingerprint(request)
+    def _request_key(self, spider, request):
+        rfp = request_fingerprint(request)
+        # We could disable the namespacing in sharded mode (old behaviour),
+        # but keeping it allows us to merge collections later without
+        # worrying about key conflicts.
+        #if self.sharded:
+        #    return request_fingerprint(request)
+        return '%s/%s' % (spider.name, request_fingerprint(request))
