@@ -8,8 +8,8 @@ web crawling framework.
 Requirements
 ============
 
-* Scrapy 0.12 or above
-* pymongo 1.6 or above
+* Scrapy 0.14 or above
+* pymongo 2.4 or above
 
 Install
 =======

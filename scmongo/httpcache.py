@@ -17,10 +17,10 @@ from scrapy.utils.request import request_fingerprint
 from scrapy.http import Headers
 
 try:
-    from pymongo import Connection
+    from pymongo import MongoClient
     from gridfs import GridFS, errors
 except ImportError:
-    Connection = None
+    MongoClient = None
 
 def get_database(settings):
     """Return Mongo database based on the given settings, also pulling the
@@ -59,13 +59,13 @@ class MongoCacheStorage(object):
     """
 
     def __init__(self, settings):
-        if Connection is None:
+        if MongoClient is None:
             raise NotConfigured('%s is missing pymongo or gridfs module.' %
                                 self.__class__.__name__)
         self.expire = settings.getint('HTTPCACHE_EXPIRATION_SECS')
         self.sharded = settings.getbool('HTTPCACHE_SHARDED', False)
         host, port, db, user, password = get_database(settings)
-        self.db = Connection(host, port)[db]
+        self.db = MongoClient(host, port)[db]
         if user is not None and password is not None:
             self.db.authenticate(user, password)
         self.fs = {}
