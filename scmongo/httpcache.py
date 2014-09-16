@@ -11,13 +11,14 @@ To use it, set the following Scrapy setting in your project:
 import os
 from time import time
 
+from scrapy import log
 from scrapy.responsetypes import responsetypes
 from scrapy.exceptions import NotConfigured
 from scrapy.utils.request import request_fingerprint
 from scrapy.http import Headers
 
 try:
-    from pymongo import MongoClient
+    from pymongo import MongoClient, MongoReplicaSetClient
     from gridfs import GridFS, errors
 except ImportError:
     MongoClient = None
@@ -26,6 +27,17 @@ def get_database(settings):
     """Return Mongo database based on the given settings, also pulling the
     mongo host, port and database form the environment variables if they're not
     defined in the settings.
+
+    HOST may be a 'mongodb://' URI string, in which case it will override any
+    set PORT and DATABASE parameters.
+
+    If user and password parameters are specified and also passed in a
+    mongodb URI, the call to authenticate() later (probably) overrides the URI
+    string's earlier login.
+
+    Specifying an auth 'mechanism' or 'source' (Mongo 2.5+) currently only
+    works by using a host URI string (we don't pass these to authenticate()),
+    any kwargs will be passed on to the MongoClient call (e.g. for ssl setup).
     """
 
     host = settings['HTTPCACHE_MONGO_HOST'] \
@@ -58,16 +70,27 @@ class MongoCacheStorage(object):
     each spider, similar to FilesystemCacheStorage using folders per spider.
     """
 
-    def __init__(self, settings):
+    def __init__(self, settings, **kw):
         if MongoClient is None:
             raise NotConfigured('%s is missing pymongo or gridfs module.' %
                                 self.__class__.__name__)
         self.expire = settings.getint('HTTPCACHE_EXPIRATION_SECS')
         self.sharded = settings.getbool('HTTPCACHE_SHARDED', False)
         host, port, db, user, password = get_database(settings)
-        self.db = MongoClient(host, port)[db]
+        # merge any settings into kwargs (which take preference)
+        db = kwargs.pop('db', db)
+        kwargs = dict(host=host, port=port)
+        kwargs.update(kw)
+        if 'replicaSet' in kwargs:
+            client = MongoReplicaSetClient(**kwargs)
+        else:
+            client = MongoClient(**kwargs)
+        self.db = client[db]
         if user is not None and password is not None:
             self.db.authenticate(user, password)
+        log.msg('%s connected to %s:%s, using database \'%s\'' %
+                (self.__class__.__name__, client.host, client.port, db),
+                level=log.DEBUG)
         self.fs = {}
 
     def open_spider(self, spider):
