@@ -40,26 +40,32 @@ def get_database(settings):
     any kwargs will be passed on to the MongoClient call (e.g. for ssl setup).
     """
 
-    host = settings['HTTPCACHE_MONGO_HOST'] \
-        or settings['MONGO_HOST'] \
-        or os.environ.get('MONGO_HOST') \
-        or 'localhost'
-    port = settings.getint('HTTPCACHE_MONGO_PORT') \
-        or settings.getint('MONGO_PORT') \
-        or int(os.environ.get('MONGO_PORT', '27017')) \
-        or 27017
-    db = settings['HTTPCACHE_MONGO_DATABASE'] \
-        or settings['MONGO_DATABASE'] \
-        or os.environ.get('MONGO_DATABASE') \
-        or settings['BOT_NAME']
-    user = settings['HTTPCACHE_MONGO_USERNAME'] \
-        or settings['MONGO_USERNAME'] \
-        or os.environ.get('MONGO_USERNAME')
-    password = settings['HTTPCACHE_MONGO_PASSWORD'] \
-        or settings['MONGO_PASSWORD'] \
-        or os.environ.get('MONGO_PASSWORD')
-
-    return (host, port, db, user, password)
+    conf = {
+        'host': settings['HTTPCACHE_MONGO_HOST'] \
+                or settings['MONGO_HOST'] \
+                or os.environ.get('MONGO_HOST')
+                or 'localhost',
+        'port': settings.getint('HTTPCACHE_MONGO_PORT') \
+                or settings.getint('MONGO_PORT') \
+                or int(os.environ.get('MONGO_PORT', '27017')) \
+                or 27017,
+        'db': settings['HTTPCACHE_MONGO_DATABASE'] \
+                or settings['MONGO_DATABASE'] \
+                or os.environ.get('MONGO_DATABASE') \
+                or settings['BOT_NAME'],
+        'user': settings['HTTPCACHE_MONGO_USERNAME'] \
+                or settings['MONGO_USERNAME'] \
+                or os.environ.get('MONGO_USERNAME'),
+        'password': settings['HTTPCACHE_MONGO_PASSWORD'] \
+                or settings['MONGO_PASSWORD'] \
+                or os.environ.get('MONGO_PASSWORD'),
+    }
+    # Support passing any other options to MongoClient;
+    # options passed as "positional arguments" take precedence
+    kwargs = settings.getdict('HTTPCACHE_MONGO_CONFIG', None) \
+                or settings.getdict('MONGO_CONFIG')
+    conf.update(kwargs)
+    return conf
 
 
 class MongoCacheStorage(object):
@@ -76,11 +82,11 @@ class MongoCacheStorage(object):
                                 self.__class__.__name__)
         self.expire = settings.getint('HTTPCACHE_EXPIRATION_SECS')
         self.sharded = settings.getbool('HTTPCACHE_SHARDED', False)
-        host, port, db, user, password = get_database(settings)
-        # merge any settings into kwargs (which take preference)
-        db = kwargs.pop('db', db)
-        kwargs = dict(host=host, port=port)
+        kwargs = get_database(settings)
         kwargs.update(kw)
+        db = kwargs.pop('db')
+        user = kwargs.pop('user', None)
+        password = kwargs.pop('password', None)
         if 'replicaSet' in kwargs:
             client = MongoReplicaSetClient(**kwargs)
         else:
