@@ -19,6 +19,8 @@ from scrapy.http import Headers
 
 try:
     from pymongo import MongoClient, MongoReplicaSetClient
+    from pymongo.errors import ConfigurationError
+    from pymongo import version_tuple as mongo_version
     from gridfs import GridFS, errors
 except ImportError:
     MongoClient = None
@@ -80,6 +82,10 @@ class MongoCacheStorage(object):
         if MongoClient is None:
             raise NotConfigured('%s is missing pymongo or gridfs module.' %
                                 self.__class__.__name__)
+        if (2,4,0) > mongo_version:
+            version = '.'.join('%s'% v for v in mongo_version)
+            raise NotConfigured('%s requires pymongo version >= 2.4 but got %s' %
+                    (self.__class__.__name__, version))
         self.expire = settings.getint('HTTPCACHE_EXPIRATION_SECS')
         self.sharded = settings.getbool('HTTPCACHE_SHARDED', False)
         kwargs = get_database(settings)
@@ -91,7 +97,31 @@ class MongoCacheStorage(object):
             client = MongoReplicaSetClient(**kwargs)
         else:
             client = MongoClient(**kwargs)
-        self.db = client[db]
+
+        # do not override a database passed in a 'mongodb://' URI string
+        try:
+            self.db = client.get_default_database()
+        except ConfigurationError:
+            self.db = client[db]
+        except TypeError:
+            # get_default_database() only since pymongo 2.6, but
+            # pymongo>2.5.2 only works with mongodb > ~2.4.3
+            # fall back to parsing uri string in this edge-case :(
+            if 'mongodb://' in kwargs.get('host'):
+                try:
+                    from urlparse import urlparse
+                    loc = urlparse(uri).path.strip('/')
+                    if not loc:
+                        self.db = client[db]
+                except (ImportError, Exception):
+                    client.connection.close()
+                    raise NotConfigured('%s could not reliably detect if \
+                    there was a database passed in URI string. Please install \
+                    urlparse to fix this, or use host:port arguments instead.' %
+                    self.__class__.__name__)
+            else:
+                self.db = client[db]
+
         if user is not None and password is not None:
             self.db.authenticate(user, password)
         log.msg('%s connected to %s:%s, using database \'%s\'' %
