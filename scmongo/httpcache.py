@@ -1,3 +1,14 @@
+"""
+Mongo Cache Storage
+
+A MongoDB backend for HTTP cache storage. It stores responses using GridFS.
+
+To use it, set the following Scrapy setting in your project:
+
+    HTTPCACHE_STORAGE = 'scmongo.httpcache.MongoCacheStorage'
+
+"""
+import os
 from time import time
 
 from scrapy.responsetypes import responsetypes
@@ -5,9 +16,39 @@ from scrapy import conf
 from scrapy.utils.request import request_fingerprint
 from scrapy.http import Headers
 
+import pymongo
 from gridfs import GridFS, errors
 
-from scmongo.util import get_database
+def get_database(settings):
+    """Return Mongo database based on the given settings, also pulling the
+    mongo host, port and database form the environment variables if they're not
+    defined in the settings.
+    """
+
+    host = settings['HTTPCACHE_MONGO_HOST'] \
+        or settings['MONGO_HOST'] \
+        or os.environ.get('MONGO_HOST') \
+        or 'localhost'
+    port = settings.getint('HTTPCACHE_MONGO_PORT') \
+        or settings.getint('MONGO_PORT') \
+        or int(os.environ.get('MONGO_PORT', '27017')) \
+        or 27017
+    db = settings['HTTPCACHE_MONGO_DATABASE'] \
+        or settings['MONGO_DATABASE'] \
+        or os.environ.get('MONGO_DATABASE') \
+        or settings['BOT_NAME']
+    user = settings['HTTPCACHE_MONGO_USERNAME'] \
+        or settings['MONGO_USERNAME'] \
+        or os.environ.get('MONGO_USERNAME')
+    password = settings['HTTPCACHE_MONGO_PASSWORD'] \
+        or settings['MONGO_PASSWORD'] \
+        or os.environ.get('MONGO_PASSWORD')
+
+    connection = pymongo.Connection(host, port)[db]
+    if user is not None and password is not None:
+        connection.authenticate(user, password)
+
+    return connection
 
 
 class MongoCacheStorage(object):
@@ -37,7 +78,7 @@ class MongoCacheStorage(object):
         respcls = responsetypes.from_args(headers=headers, url=url)
         response = respcls(url=url, headers=headers, status=status, body=body)
         return response
- 
+
     def store_response(self, spider, request, response):
         key = spider.name + '/' + self._request_key(request)
         kwargs = {
