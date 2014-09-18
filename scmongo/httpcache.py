@@ -143,7 +143,8 @@ class MongoCacheStorage(object):
             self.db.connection.close()
 
     def retrieve_response(self, spider, request):
-        gf = self._get_file(spider, request)
+        key = self._request_key(spider, request)
+        gf = self._get_file(spider, key)
         if gf is None:
             return # not cached
         url = str(gf.url)
@@ -156,7 +157,7 @@ class MongoCacheStorage(object):
 
     def store_response(self, spider, request, response):
         key = self._request_key(spider, request)
-        kwargs = {
+        metadata = {
             '_id': key,
             'time': time(),
             'status': response.status,
@@ -164,13 +165,12 @@ class MongoCacheStorage(object):
             'headers': dict(response.headers),
         }
         try:
-            self.fs[spider].put(response.body, **kwargs)
+            self.fs[spider].put(response.body, **metadata)
         except errors.FileExists:
             self.fs[spider].delete(key)
-            self.fs[spider].put(response.body, **kwargs)
+            self.fs[spider].put(response.body, **metadata)
 
-    def _get_file(self, spider, request):
-        key = self._request_key(spider, request)
+    def _get_file(self, spider, key):
         try:
             gf = self.fs[spider].get(key)
         except errors.NoFile:
@@ -185,5 +185,5 @@ class MongoCacheStorage(object):
         # but keeping it allows us to merge collections later without
         # worrying about key conflicts.
         #if self.sharded:
-        #    return request_fingerprint(request)
-        return '%s/%s' % (spider.name, request_fingerprint(request))
+        #    return rfp
+        return '%s/%s' % (spider.name, rfp)
